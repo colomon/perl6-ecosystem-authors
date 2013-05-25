@@ -1,0 +1,86 @@
+#!/usr/bin/env perl6
+use Shell::Command;
+use Panda;
+
+sub wrap ($str) {
+    return $str.comb(/ . ** 0..40 [ << | $ ]/).grep({ .chars > 0 }).join("\n" ~ " " x 36);
+}
+
+sub projectinfo($panda, @args) {
+    for @args -> $p {
+        my $x = $panda.ecosystem.get-project($p);
+        $x = $panda.project-from-local($p) unless $x;
+        if $x {
+            my $state = $panda.ecosystem.project-get-state($x);
+            say 'PROJECT LIST:';
+            say $x.name => $x.version;
+            say 'Depends on:' => $x.dependencies.Str if $x.dependencies;
+            given $state {
+                when 'installed'     {
+                    say 'State' => 'installed';
+                }
+                when 'installed-dep' {
+                    say 'State' => 'installed as a dependency';
+                }
+            }
+            for $x.metainfo.kv -> $k, $v {
+                if $k ~~ none('version', 'name', 'depends') {
+                    say $k.ucfirst => $v;
+                }
+            }
+            if $state ~~ /^ 'installed' / {
+                say 'INSTALLED VERSION:';
+                .say for $panda.ecosystem.project-get-saved-meta($x).pairs.sort;
+            }
+            say '';
+        } else {
+            say "Project '$p' not found"
+        }
+    }
+}
+
+# default opts for MAIN
+if %*ENV<PANDA_DEFAULT_OPTS> {
+    @*ARGS = %*ENV<PANDA_DEFAULT_OPTS> ~ (@*ARGS ?? ' ' ~ @*ARGS !! '');
+}
+
+# initialize the Panda object
+my $panda;
+{
+    my $pandadir;
+    my $destdir = %*ENV<DESTDIR>;
+    $destdir = "{cwd}/$destdir" if defined($destdir) &&  $*OS ne 'MSWin32' && $destdir !~~ /^ '/' /;
+    for grep(*.defined, $destdir, %*CUSTOM_LIB<site home>) -> $prefix {
+        $destdir  = $prefix;
+        $pandadir = "$prefix/panda";
+        try mkpath $pandadir unless $pandadir.IO ~~ :d;
+        last if $pandadir.path.w
+    }
+    unless $pandadir.path.w {
+        die "Found no writable directory into which panda could be installed";
+    }
+
+    $panda = Panda.new(
+        srcdir       => "$pandadir/src",
+        destdir      =>  $destdir,
+        statefile    => "$pandadir/state",
+        projectsfile => "$pandadir/projects.json"
+    );
+}
+
+my $es        = $panda.ecosystem;
+my @projects  = $es.project-list.sort.map: { $es.get-project($_) };
+my @saved     = @projects.map({ $es.project-get-saved-meta($_) || {} });
+
+for @projects -> $x {
+    my $meta = $x.metainfo;
+    my $url  = $meta<source-url> // $meta<repo-url> // 'UNKNOWN';
+    my $rev  = $meta<source-revision> // '?';
+    my $ver  = $meta<version>;
+    
+    if $url ~~ rx{ "/github.com/" (.*?) "/" } {
+        say $x.name => ~$0;
+    }
+}
+
+# vim: ft=perl6
