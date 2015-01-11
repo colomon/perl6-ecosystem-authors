@@ -60,12 +60,12 @@ my $panda;
         die "Found no writable directory into which panda could be installed";
     }
 
-    $panda = Panda.new(
-        srcdir       => "$pandadir/src",
-        destdir      =>  $destdir,
+    my $ecosystem = Panda::Ecosystem.new(
         statefile    => "$pandadir/state",
-        projectsfile => "$pandadir/projects.json"
+        projectsfile => "$pandadir/projects.json",
     );
+
+    $panda = Panda.new(:$ecosystem);
 }
 
 my $es        = $panda.ecosystem;
